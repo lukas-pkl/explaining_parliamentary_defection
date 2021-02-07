@@ -1,31 +1,29 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 26 15:08:34 2019
+Created: 19 06 2019 
+Edited: 06 02 2021
 
-@author: l.pukelis
+Author: LukasP
+
+Script collects votting registrations for each parliamentary vote from LRS website
 """
 
-
-import os
-os.chdir("C:\\Users\\l.pukelis\\LRS_KTU\\2_attempt\\")
-
 import requests
-from bs4 import BeautifulSoup
-
 import time
 from tqdm import tqdm
+import json
+from bs4 import BeautifulSoup
+from utils import db_conn
 
-import sqlite3
 
-#%%
-def db_conn():
-    cnxn = sqlite3.connect('LRS_data.db')
-    print(sqlite3.version)
-    cursor=cnxn.cursor()
-    return cnxn, cursor
-cnxn, cursor=db_conn()
-#%%
-'''
+#Read parameters from `CONSTANTS.jsos` file 
+with open("CONSTANTS.json" , "r") as file :
+    constants = json.loads( file.read() )
+
+#Initialise/Connect to DB
+cnxn, cursor=db_conn( constants["DB_name"])
+
+#Create an empty table
 query1 = "DROP TABLE IF EXISTS registrations"
 cursor.execute(query1)
 cnxn.commit()
@@ -45,32 +43,24 @@ has_registered TEXT NULL
 
 cursor.execute(query)
 cnxn.commit()
-#'''
 
-
-
-#%%
+#Select registration ids from votings table
 query = "SELECT DISTINCT registration_id FROM votings"
 cursor.execute(query)
 registration_ids = [row[0] for row in cursor.fetchall()]
 
-query = "SELECT DISTINCT registration_id FROM registrations"
-cursor.execute(query)
-registration_ids_in_db = [row[0] for row in cursor.fetchall()]
-
-registration_ids_to_check = [i for i in registration_ids if i not in registration_ids_in_db]
-#%%
+#Call API; get data
 xmls = []
 event_url = "http://apps.lrs.lt/sip/p2b.ad_sp_registracijos_rezultatai?registracijos_id="
-for ids in tqdm(registration_ids_to_check):
+for ids in tqdm(registration_ids):
     result = requests.get(event_url + ids)
     xmls.append(result.text)
+    time.sleep(0.2)
 
-    #time.sleep(0.2)
-#%%
+#Parse XML; Get list of dicts
 data = []
 for index, item in enumerate(tqdm(xmls)):
-    registration_id = registration_ids_to_check[index]
+    registration_id = registration_ids[index]
     soup = BeautifulSoup(item, "html.parser")
     ts = soup.find("seimonariųregistracija")
     timestamp = ""
@@ -94,7 +84,7 @@ for index, item in enumerate(tqdm(xmls)):
 
         data.append(d)
         
-#%%
+#Insert data into DB
 query="""INSERT INTO registrations (
                     registration_id , 
                     timestamp , 
@@ -116,4 +106,5 @@ for item in tqdm(data):
     cursor.execute(query, t)
 cnxn.commit()
 
-
+#Close db connection
+cnxn.close()
