@@ -23,11 +23,39 @@ with open("CONSTANTS.json" , "r") as file :
 #Initialise/Connect to DB
 cnxn, cursor=db_conn( constants["DB_name"])
 
+'''
+#Create a blank Agenda items table
+query1 = "DROP TABLE IF EXISTS agenda_items"
+cursor.execute(query1)
+cnxn.commit()
+
+query="""
+CREATE TABLE agenda_items (
+id INTEGER PRIMARY KEY AUTOINCREMENT ,
+stage_id TEXT NULL,
+stage_name TEXT NULL,
+issue_name TEXT NULL,
+issue_number TEXT NULL,
+sitting_id TEXT NULL
+);
+"""
+
+cursor.execute(query)
+cnxn.commit()
+'''
+
 
 # Get sitting IDs from DB
 query = "SELECT sitting_id FROM sittings"
 cursor.execute(query)
-sitting_ids = [str(row[0]) for row in cursor.fetchall()]
+all_sitting_ids = [str(row[0]) for row in cursor.fetchall()]
+
+query = "SELECT DISTINCT sitting_id FROM agenda_items"
+cursor.execute(query)
+processed_sitting_ids = [str(row[0]) for row in cursor.fetchall()]
+
+sitting_ids = [i for i in all_sitting_ids if i not in processed_sitting_ids]
+
 
 #Call API; Get agenda items for each sitting
 xmls = []
@@ -59,24 +87,6 @@ for index, item in enumerate(xmls):
                 "sitting_id" : sitting_id}
             data.append(d)
 
-#Create a blank Agenda items table
-query1 = "DROP TABLE IF EXISTS agenda_items"
-cursor.execute(query1)
-cnxn.commit()
-
-query="""
-CREATE TABLE agenda_items (
-id INTEGER PRIMARY KEY AUTOINCREMENT ,
-stage_id TEXT NULL,
-stage_name TEXT NULL,
-issue_name TEXT NULL,
-issue_number TEXT NULL,
-sitting_id TEXT NULL
-);
-"""
-
-cursor.execute(query)
-cnxn.commit()
 
 #Insert data
 query="""INSERT INTO agenda_items (
